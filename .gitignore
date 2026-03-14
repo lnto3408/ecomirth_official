@@ -1,0 +1,20 @@
+node_modules/
+dist/
+out/
+
+# Config & secrets
+*.env
+config.json
+analyzer-config.json
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Electron
+*.asar
+
+# SQLite DB
+*.db
+*.db-wal
+*.db-shm

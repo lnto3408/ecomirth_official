@@ -1,0 +1,15 @@
+{
+  "name": "card-news-sns-analyzer",
+  "version": "1.0.0",
+  "description": "카드뉴스 SNS 분석 대시보드",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron . --dev"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.0.0",
+    "chart.js": "^4.4.0",
+    "electron": "^33.0.0"
+  }
+}
