@@ -17,16 +17,26 @@ async function renderTimeAnalysis() {
   const platforms = platform === 'all' ? PLATFORMS : [platform];
   const allData = [];
   for (const p of platforms) {
-    const stats = await window.api.getHourlyStats(p, 90);
-    allData.push(...stats);
+    try {
+      const stats = await window.api.getHourlyStats(p, 90);
+      allData.push(...stats);
+    } catch (err) {
+      console.error(`getHourlyStats(${p}) 실패:`, err.message);
+    }
   }
 
   const body = document.getElementById('time-analysis-body');
 
   if (!allData.length) {
+    // 데이터 없는 이유 확인
+    let posts = [];
+    try { posts = await window.api.getPostsWithLatestMetrics({ days: 90 }); } catch {}
     body.innerHTML = emptyState(
       '<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>',
-      '데이터 없음', '포스트가 쌓이면 최적 발행 시간을 분석합니다.'
+      '데이터 없음',
+      posts.length > 0
+        ? `포스트 ${posts.length}개가 있지만 시간 데이터가 없습니다. 포스트의 발행 시간(posted_at)을 확인하세요.`
+        : '포스트가 쌓이면 최적 발행 시간을 분석합니다.'
     );
     return;
   }

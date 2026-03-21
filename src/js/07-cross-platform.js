@@ -12,7 +12,12 @@ async function renderCrossPlatform() {
     </div>
   `;
 
-  const data = await window.api.getContentGroupComparison();
+  let data = [];
+  try {
+    data = await window.api.getContentGroupComparison();
+  } catch (err) {
+    console.error('getContentGroupComparison 실패:', err.message);
+  }
   const body = document.getElementById('cross-platform-body');
 
   if (!data.length) {

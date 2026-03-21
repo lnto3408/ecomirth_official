@@ -7,7 +7,7 @@ async function renderSettings() {
 
   const categories = settings.categories || CATEGORIES;
   const autoCollect = settings.autoCollect || false;
-  const collectInterval = settings.collectInterval || 6;
+  const collectInterval = settings.collectInterval || 1;
 
   view.innerHTML = `
     <div class="view-header">
@@ -69,10 +69,38 @@ async function renderSettings() {
         </label>
       </div>
       <div class="form-group">
-        <label class="form-label">수집 간격 (시간)</label>
-        <input class="input-field" type="number" id="settings-collect-interval" value="${collectInterval}" min="1" max="24" style="width:100px">
+        <label class="form-label">수집 간격 (분)</label>
+        <input class="input-field" type="number" id="settings-collect-interval" value="${collectInterval}" min="1" max="1440" style="width:100px">
       </div>
       <button class="btn-primary btn-small" onclick="saveScheduleSettings()">스케줄러 저장</button>
+    </div>
+
+    <div class="card">
+      <div class="card-title">네이버 API (트렌드 분석용)</div>
+      <p style="font-size:12px;color:var(--text-dim);margin-bottom:12px">
+        <a href="https://developers.naver.com/apps/#/register" target="_blank" style="color:var(--accent)">네이버 개발자센터</a>에서 애플리케이션 등록 후 Client ID/Secret을 입력하세요.
+      </p>
+      <div class="form-group">
+        <label class="form-label">Client ID</label>
+        <input class="input-field" id="settings-naver-client-id" value="${settings.naverApi?.clientId || ''}" placeholder="네이버 Client ID">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Client Secret</label>
+        <input class="input-field" id="settings-naver-client-secret" type="password" value="${settings.naverApi?.clientSecret || ''}" placeholder="네이버 Client Secret">
+      </div>
+      <button class="btn-primary btn-small" onclick="saveNaverApiSettings()">네이버 API 저장</button>
+    </div>
+
+    <div class="card">
+      <div class="card-title">YouTube API (트렌드 분석용)</div>
+      <p style="font-size:12px;color:var(--text-dim);margin-bottom:12px">
+        <a href="https://console.cloud.google.com/apis/credentials" target="_blank" style="color:var(--accent)">Google Cloud Console</a>에서 YouTube Data API v3 키를 발급하세요.
+      </p>
+      <div class="form-group">
+        <label class="form-label">API Key</label>
+        <input class="input-field" id="settings-youtube-api-key" type="password" value="${settings.youtubeApiKey || ''}" placeholder="YouTube Data API v3 Key">
+      </div>
+      <button class="btn-primary btn-small" onclick="saveYoutubeApiSettings()">YouTube API 저장</button>
     </div>
 
     <div class="card">
@@ -122,10 +150,27 @@ async function saveCategories() {
   showToast('카테고리 저장됨');
 }
 
+async function saveNaverApiSettings() {
+  const settings = await window.api.loadAnalyzerSettings();
+  settings.naverApi = {
+    clientId: document.getElementById('settings-naver-client-id')?.value?.trim() || '',
+    clientSecret: document.getElementById('settings-naver-client-secret')?.value?.trim() || '',
+  };
+  await window.api.saveAnalyzerSettings(settings);
+  showToast('네이버 API 설정 저장됨');
+}
+
+async function saveYoutubeApiSettings() {
+  const settings = await window.api.loadAnalyzerSettings();
+  settings.youtubeApiKey = document.getElementById('settings-youtube-api-key')?.value?.trim() || '';
+  await window.api.saveAnalyzerSettings(settings);
+  showToast('YouTube API 설정 저장됨');
+}
+
 async function saveScheduleSettings() {
   const settings = await window.api.loadAnalyzerSettings();
   settings.autoCollect = document.getElementById('settings-auto-collect')?.checked || false;
-  settings.collectInterval = parseInt(document.getElementById('settings-collect-interval')?.value) || 6;
+  settings.collectInterval = parseInt(document.getElementById('settings-collect-interval')?.value) || 1;
   await window.api.saveAnalyzerSettings(settings);
   showToast('스케줄러 설정 저장됨');
 }

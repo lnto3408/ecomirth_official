@@ -63,14 +63,61 @@ async function renderDashboard() {
     </div>
 
     <div class="card">
-      <div class="card-title">포스트별 성과 (최근 ${days}일)</div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+        <div class="card-title" style="margin:0">포스트별 성과 (최근 ${days}일)</div>
+        <div class="period-selector">
+          ${[['time','시간순'],['likes','좋아요'],['comments','댓글'],['shares','공유'],['total','종합']].map(([k,l]) =>
+            `<button class="period-btn ${AppState.postPerformanceSort === k ? 'active' : ''}" onclick="changePostPerfSort('${k}')">${l}</button>`
+          ).join('')}
+        </div>
+      </div>
       <div class="chart-container tall"><canvas id="chart-post-performance"></canvas></div>
+    </div>
+
+    <div class="card" id="dashboard-trend-widget">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+        <div class="card-title" style="margin:0">핫 트렌드</div>
+        <button class="btn-secondary btn-small" onclick="switchView('trends')">트렌드 분석 →</button>
+      </div>
+      <div id="dashboard-trend-content" style="color:var(--text-dim);font-size:13px">로딩 중...</div>
     </div>
   `;
 
+  AppState._dashboardPosts = posts;
   renderFollowersChart(threadsStats, igStats, tiktokStats);
   renderReachChart(threadsStats, igStats, tiktokStats);
   renderPostPerformanceChart(posts);
+  loadDashboardTrendWidget();
+}
+
+async function loadDashboardTrendWidget() {
+  const container = document.getElementById('dashboard-trend-content');
+  if (!container) return;
+
+  try {
+    // 핫 토픽 (RSS 기반, DB 캐시)
+    const snapshot = await window.api.getTrendSnapshot('hot-topics');
+    if (!snapshot?.data?.length) {
+      container.innerHTML = '<span style="color:var(--text-dim)">트렌드 데이터 수집 중... 트렌드 탭에서 새로고침하세요.</span>';
+      return;
+    }
+
+    const topics = snapshot.data.slice(0, 8);
+    container.innerHTML = `
+      <div style="display:flex;flex-wrap:wrap;gap:6px">
+        ${topics.map((t, i) => `
+          <span class="keyword-tag" style="font-size:12px;padding:4px 10px" onclick="switchView('trends')">
+            <span style="color:var(--accent);font-weight:600;margin-right:3px">${i+1}</span>
+            ${t.keyword}
+            ${t.traffic ? `<span style="font-size:10px;color:var(--text-dim);margin-left:3px">${t.traffic}</span>` : ''}
+          </span>
+        `).join('')}
+      </div>
+      <div style="font-size:11px;color:var(--text-dim);margin-top:8px">업데이트: ${relativeTime(snapshot.collected_at)}</div>
+    `;
+  } catch {
+    container.innerHTML = '<span style="color:var(--text-dim)">트렌드 위젯 로딩 실패</span>';
+  }
 }
 
 function changeDashboardPeriod(days) {
@@ -134,7 +181,22 @@ function renderPostPerformanceChart(posts) {
   const ctx = document.getElementById('chart-post-performance');
   if (!ctx || !posts.length) return;
 
-  const sorted = posts.slice().reverse().slice(-30); // last 30 posts, chronological
+  let sorted = posts.slice().reverse().slice(-30); // last 30 posts, chronological
+
+  const sortKey = AppState.postPerformanceSort;
+  if (sortKey === 'likes') {
+    sorted.sort((a, b) => (b.likes || 0) - (a.likes || 0));
+  } else if (sortKey === 'comments') {
+    sorted.sort((a, b) => (b.comments || 0) - (a.comments || 0));
+  } else if (sortKey === 'shares') {
+    sorted.sort((a, b) => (b.shares || 0) - (a.shares || 0));
+  } else if (sortKey === 'total') {
+    const total = p => (p.likes || 0) + (p.comments || 0) + (p.shares || 0) + (p.saves || 0);
+    sorted.sort((a, b) => total(b) - total(a));
+  }
+  // 'time' keeps chronological order
+
+  AppState._chartPostMap = sorted;
 
   AppState.charts['chart-post-performance'] = new Chart(ctx, {
     type: 'bar',
@@ -151,9 +213,32 @@ function renderPostPerformanceChart(posts) {
       scales: {
         x: { stacked: true, ticks: { color: '#888', maxRotation: 45 }, grid: { display: false } },
         y: { stacked: true, ticks: { color: '#888' }, grid: { color: '#2a2a2a' } }
-      }
+      },
+      onClick(evt, elements) {
+        if (!elements.length) return;
+        const idx = elements[0].index;
+        const post = AppState._chartPostMap[idx];
+        if (post) showPostDetail(post.id);
+      },
+      onHover(evt, elements) {
+        evt.native.target.style.cursor = elements.length ? 'pointer' : 'default';
+      },
     },
   });
+}
+
+function changePostPerfSort(key) {
+  AppState.postPerformanceSort = key;
+  // Update button active states
+  const card = document.getElementById('chart-post-performance')?.closest('.card');
+  if (card) {
+    card.querySelectorAll('.period-btn').forEach(btn => {
+      btn.classList.toggle('active', btn.textContent.trim() === {time:'시간순',likes:'좋아요',comments:'댓글',shares:'공유',total:'종합'}[key]);
+    });
+  }
+  if (AppState._dashboardPosts) {
+    renderPostPerformanceChart(AppState._dashboardPosts);
+  }
 }
 
 function chartOptions(yLabel) {

@@ -69,11 +69,29 @@ function migrate() {
       posts_updated INTEGER DEFAULT 0
     );
 
+    CREATE TABLE IF NOT EXISTS trends (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      source TEXT NOT NULL,
+      collected_at TEXT NOT NULL,
+      data TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS trend_keywords (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      keyword TEXT NOT NULL,
+      source TEXT NOT NULL,
+      date TEXT NOT NULL,
+      score REAL DEFAULT 0,
+      UNIQUE(keyword, source, date)
+    );
+
     CREATE INDEX IF NOT EXISTS idx_posts_platform ON posts(platform);
     CREATE INDEX IF NOT EXISTS idx_posts_category ON posts(category);
     CREATE INDEX IF NOT EXISTS idx_posts_content_group ON posts(content_group);
     CREATE INDEX IF NOT EXISTS idx_metrics_post_id ON metrics(post_id);
     CREATE INDEX IF NOT EXISTS idx_account_stats_platform_date ON account_stats(platform, date);
+    CREATE INDEX IF NOT EXISTS idx_trends_source_date ON trends(source, collected_at);
+    CREATE INDEX IF NOT EXISTS idx_trend_keywords ON trend_keywords(keyword, source, date);
   `);
 }
 
@@ -175,14 +193,19 @@ function getLatestAccountStats(platform) {
 
 // ── Collection Log ──
 
+function localNow() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}:${String(d.getSeconds()).padStart(2,'0')}`;
+}
+
 function startCollection(platform) {
-  const stmt = db.prepare(`INSERT INTO collection_log (platform, started_at) VALUES (?, datetime('now'))`);
-  return stmt.run(platform).lastInsertRowid;
+  const stmt = db.prepare(`INSERT INTO collection_log (platform, started_at) VALUES (?, ?)`);
+  return stmt.run(platform, localNow()).lastInsertRowid;
 }
 
 function completeCollection(id, status, message, posts_updated) {
-  db.prepare(`UPDATE collection_log SET completed_at = datetime('now'), status = ?, message = ?, posts_updated = ? WHERE id = ?`)
-    .run(status, message, posts_updated, id);
+  db.prepare(`UPDATE collection_log SET completed_at = ?, status = ?, message = ?, posts_updated = ? WHERE id = ?`)
+    .run(localNow(), status, message, posts_updated, id);
 }
 
 function getCollectionLogs(limit = 20) {
@@ -247,6 +270,47 @@ function getContentGroupComparison() {
   `).all();
 }
 
+// ── Trends ──
+
+function saveTrendSnapshot(source, data) {
+  db.prepare('INSERT INTO trends (source, collected_at, data) VALUES (?, ?, ?)')
+    .run(source, localNow(), JSON.stringify(data));
+}
+
+function getLatestTrendSnapshot(source) {
+  const row = db.prepare('SELECT * FROM trends WHERE source = ? ORDER BY collected_at DESC LIMIT 1').get(source);
+  if (row) row.data = JSON.parse(row.data);
+  return row;
+}
+
+function saveTrendKeywords(source, date, keywordScores) {
+  const stmt = db.prepare(`
+    INSERT INTO trend_keywords (keyword, source, date, score)
+    VALUES (?, ?, ?, ?)
+    ON CONFLICT(keyword, source, date) DO UPDATE SET score = excluded.score
+  `);
+  const tx = db.transaction((items) => {
+    for (const { keyword, score } of items) {
+      stmt.run(keyword, source, date, score);
+    }
+  });
+  tx(keywordScores);
+}
+
+function getTrendKeywords(source, keyword, days = 30) {
+  return db.prepare(`
+    SELECT * FROM trend_keywords
+    WHERE source = ? AND keyword = ? AND date >= date('now', '-' || ? || ' days')
+    ORDER BY date ASC
+  `).all(source, keyword, days);
+}
+
+function getRecentTrendSnapshots(source, limit = 10) {
+  const rows = db.prepare('SELECT * FROM trends WHERE source = ? ORDER BY collected_at DESC LIMIT ?').all(source, limit);
+  for (const row of rows) row.data = JSON.parse(row.data);
+  return rows;
+}
+
 function close() {
   if (db) { db.close(); db = null; }
 }
@@ -257,5 +321,6 @@ module.exports = {
   addMetrics, getLatestMetrics, getMetricsHistory,
   upsertAccountStats, getAccountStats, getLatestAccountStats,
   startCollection, completeCollection, getCollectionLogs,
-  getPostsWithLatestMetrics, getCategoryStats, getHourlyStats, getContentGroupComparison
+  getPostsWithLatestMetrics, getCategoryStats, getHourlyStats, getContentGroupComparison,
+  saveTrendSnapshot, getLatestTrendSnapshot, saveTrendKeywords, getTrendKeywords, getRecentTrendSnapshots
 };

@@ -1,6 +1,7 @@
 // Post list, manual entry, tagging
 
 let postsFilter = { platform: null, category: null };
+let postsSort = { key: 'date', dir: 'desc' }; // key: 'likes' | 'views' | 'date'
 
 async function renderPosts() {
   const view = document.getElementById('view-posts');
@@ -44,16 +45,35 @@ async function loadPosts() {
     return;
   }
 
+  // Fetch metrics for all posts, then sort
+  const postsWithMetrics = await Promise.all(posts.map(async p => {
+    try {
+      const m = await window.api.getLatestMetrics(p.id);
+      return { ...p, _likes: m?.likes || 0, _views: m?.views || 0 };
+    } catch {
+      return { ...p, _likes: 0, _views: 0 };
+    }
+  }));
+
+  const asc = postsSort.dir === 'asc' ? -1 : 1;
+  if (postsSort.key === 'likes') {
+    postsWithMetrics.sort((a, b) => (b._likes - a._likes) * asc);
+  } else if (postsSort.key === 'views') {
+    postsWithMetrics.sort((a, b) => (b._views - a._views) * asc);
+  } else {
+    postsWithMetrics.sort((a, b) => (new Date(b.posted_at || 0) - new Date(a.posted_at || 0)) * asc);
+  }
+
   container.innerHTML = `
     <table class="data-table">
       <thead><tr>
         <th>플랫폼</th><th>캡션</th><th>카테고리</th><th>그룹</th>
-        <th class="num">좋아요</th><th class="num">조회</th><th>발행일</th><th></th>
+        <th class="num" style="cursor:pointer;user-select:none" onclick="changePostsSort('likes')">좋아요 ${postsSort.key === 'likes' ? (postsSort.dir === 'desc' ? '▼' : '▲') : ''}</th>
+        <th class="num" style="cursor:pointer;user-select:none" onclick="changePostsSort('views')">조회 ${postsSort.key === 'views' ? (postsSort.dir === 'desc' ? '▼' : '▲') : ''}</th>
+        <th style="cursor:pointer;user-select:none" onclick="changePostsSort('date')">발행일 ${postsSort.key === 'date' ? (postsSort.dir === 'desc' ? '▼' : '▲') : ''}</th><th></th>
       </tr></thead>
       <tbody>
-        ${await Promise.all(posts.map(async p => {
-          const m = await window.api.getLatestMetrics(p.id);
-          return `<tr>
+        ${postsWithMetrics.map(p => `<tr style="cursor:pointer" onclick="if(!event.target.closest('select,button')){showPostDetail(${p.id})}">
             <td><span class="platform-badge ${p.platform}">${PLATFORM_LABELS[p.platform]}</span></td>
             <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${p.caption || '-'}</td>
             <td>
@@ -63,15 +83,14 @@ async function loadPosts() {
               </select>
             </td>
             <td style="max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${p.content_group || '-'}</td>
-            <td class="num">${formatNumber(m?.likes || 0)}</td>
-            <td class="num">${formatNumber(m?.views || 0)}</td>
+            <td class="num">${formatNumber(p._likes)}</td>
+            <td class="num">${formatNumber(p._views)}</td>
             <td>${formatDate(p.posted_at)}</td>
             <td>
               <button class="btn-secondary btn-small" onclick="showEditPostModal(${p.id})">편집</button>
               <button class="btn-danger btn-small" onclick="confirmDeletePost(${p.id})">삭제</button>
             </td>
-          </tr>`;
-        })).then(rows => rows.join(''))}
+          </tr>`).join('')}
       </tbody>
     </table>
   `;
@@ -83,12 +102,23 @@ function filterPosts() {
   loadPosts();
 }
 
+function changePostsSort(key) {
+  if (postsSort.key === key) {
+    postsSort.dir = postsSort.dir === 'desc' ? 'asc' : 'desc';
+  } else {
+    postsSort.key = key;
+    postsSort.dir = 'desc';
+  }
+  loadPosts();
+}
+
 async function updatePostCategory(id, category) {
   await window.api.updatePost(id, { category });
   showToast('카테고리 변경됨');
 }
 
 function showAddPostModal() {
+  document.getElementById('post-modal-overlay')?.remove();
   const overlay = document.createElement('div');
   overlay.className = 'modal-overlay';
   overlay.id = 'post-modal-overlay';
@@ -278,4 +308,190 @@ async function confirmDeletePost(id) {
   await window.api.deletePost(id);
   showToast('포스트 삭제됨');
   loadPosts();
+}
+
+// ── Post Detail ──
+
+async function showPostDetail(postId) {
+  AppState._postDetailBackView = AppState.currentView;
+
+  // Switch to posts view without triggering renderPosts
+  AppState.currentView = 'posts';
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  document.querySelectorAll('.sidebar-btn[data-view]').forEach(b => b.classList.remove('active'));
+  const postsView = document.querySelector('.view[data-view="posts"]');
+  const postsBtn = document.querySelector('.sidebar-btn[data-view="posts"]');
+  if (postsView) postsView.classList.add('active');
+  if (postsBtn) postsBtn.classList.add('active');
+
+  const view = document.getElementById('view-posts');
+  view.innerHTML = `<div style="text-align:center;padding:40px"><span class="spinner"></span></div>`;
+
+  const [post, metrics, history] = await Promise.all([
+    window.api.getPostById(postId),
+    window.api.getLatestMetrics(postId),
+    window.api.getMetricsHistory(postId),
+  ]);
+
+  if (!post) {
+    view.innerHTML = emptyState(
+      '<circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/>',
+      '포스트를 찾을 수 없음', '삭제되었거나 유효하지 않은 포스트입니다.'
+    );
+    return;
+  }
+
+  const accountStats = await window.api.getLatestAccountStats(post.platform);
+  const hashtags = (() => { try { return JSON.parse(post.hashtags || '[]'); } catch { return []; } })();
+
+  const likes = metrics?.likes || 0;
+  const comments = metrics?.comments || 0;
+  const shares = metrics?.shares || 0;
+  const saves = metrics?.saves || 0;
+  const views = metrics?.views || 0;
+  const reach = metrics?.reach || 0;
+  const engRate = engagementRate(metrics || {});
+  const followers = accountStats?.followers || 0;
+  const reachRate = followers ? ((reach / followers) * 100).toFixed(2) : '-';
+
+  view.innerHTML = `
+    <div class="view-header" style="display:flex;align-items:center;justify-content:space-between">
+      <div style="display:flex;align-items:center;gap:12px">
+        <button class="btn-secondary" onclick="backFromPostDetail()" style="padding:6px 12px">← 뒤로</button>
+        <h1 style="margin:0;font-size:18px">포스트 상세</h1>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <span class="platform-badge ${post.platform}">${PLATFORM_LABELS[post.platform]}</span>
+        <span class="category-badge" style="background:${CATEGORY_COLORS[post.category] || '#888'}22;color:${CATEGORY_COLORS[post.category] || '#888'};padding:4px 10px;border-radius:6px;font-size:12px">${CATEGORY_LABELS[post.category] || '기타'}</span>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">포스트 정보</div>
+      <p style="font-size:13px;line-height:1.6;color:var(--text-secondary);white-space:pre-wrap;margin:0 0 12px 0">${post.caption || '(캡션 없음)'}</p>
+      ${hashtags.length ? `<div style="margin-bottom:12px">${hashtags.map(h => `<span style="display:inline-block;background:var(--bg-tertiary);color:var(--text-dim);padding:2px 8px;border-radius:4px;font-size:11px;margin:2px 4px 2px 0">${h}</span>`).join('')}</div>` : ''}
+      <div style="display:flex;gap:16px;font-size:12px;color:var(--text-dim)">
+        <span>게시일: ${formatDateTime(post.posted_at)}</span>
+        ${post.slide_count > 1 ? `<span>슬라이드: ${post.slide_count}장</span>` : ''}
+        ${post.content_group ? `<span>그룹: ${post.content_group}</span>` : ''}
+      </div>
+    </div>
+
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-label">조회수</div>
+        <div class="stat-value">${formatNumber(views)}</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">좋아요</div>
+        <div class="stat-value">${formatNumber(likes)}</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">댓글</div>
+        <div class="stat-value">${formatNumber(comments)}</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">공유</div>
+        <div class="stat-value">${formatNumber(shares)}</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">저장</div>
+        <div class="stat-value">${formatNumber(saves)}</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">참여율</div>
+        <div class="stat-value">${engRate}%</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">지표 변화 추이</div>
+      <div class="chart-container tall" id="post-detail-trend-container">
+        <canvas id="chart-post-detail-trend"></canvas>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">계정 컨텍스트</div>
+      <div style="display:flex;gap:24px;font-size:14px">
+        <div><span style="color:var(--text-dim)">현재 팔로워:</span> <strong>${formatNumber(followers)}</strong></div>
+        <div><span style="color:var(--text-dim)">도달률:</span> <strong>${reachRate === '-' ? '-' : reachRate + '%'}</strong></div>
+      </div>
+    </div>
+
+    <div class="card">
+      ${emptyState(
+        '<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>',
+        '조회 소스 / 오디언스',
+        '향후 API 연동 시 제공 예정 (조회 소스, 지역, 인구통계)'
+      )}
+    </div>
+  `;
+
+  renderPostMetricsTrendChart(history);
+}
+
+function renderPostMetricsTrendChart(history) {
+  destroyChart('chart-post-detail-trend');
+  const ctx = document.getElementById('chart-post-detail-trend');
+  if (!ctx) return;
+
+  if (!history || history.length < 2) {
+    document.getElementById('post-detail-trend-container').innerHTML =
+      '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text-dim);font-size:13px">수집 데이터가 부족합니다 (최소 2개 필요)</div>';
+    return;
+  }
+
+  const labels = history.map(h => formatDateTime(h.collected_at));
+
+  const datasets = [];
+  const colors = { likes: '#4a9eff', comments: '#4caf50', shares: '#ff9800', saves: '#e1306c' };
+  const labelMap = { likes: '좋아요', comments: '댓글', shares: '공유', saves: '저장' };
+
+  for (const [key, color] of Object.entries(colors)) {
+    const data = history.map(h => h[key] || 0);
+    if (data.some(v => v > 0)) {
+      datasets.push({
+        label: labelMap[key], data, borderColor: color, backgroundColor: color + '20',
+        tension: 0.3, fill: false, yAxisID: 'y',
+      });
+    }
+  }
+
+  const viewsData = history.map(h => h.views || 0);
+  const hasViews = viewsData.some(v => v > 0);
+  if (hasViews) {
+    datasets.push({
+      label: '조회수', data: viewsData, borderColor: '#888', backgroundColor: '#88888820',
+      tension: 0.3, fill: false, yAxisID: 'y1', borderDash: [5, 3],
+    });
+  }
+
+  AppState.charts['chart-post-detail-trend'] = new Chart(ctx, {
+    type: 'line',
+    data: { labels, datasets },
+    options: {
+      ...chartOptions(''),
+      scales: {
+        x: { ticks: { color: '#888', maxRotation: 45 }, grid: { display: false } },
+        y: {
+          type: 'linear', position: 'left',
+          ticks: { color: '#888' }, grid: { color: '#2a2a2a' },
+          title: { display: true, text: '좋아요/댓글/공유/저장', color: '#888' },
+        },
+        ...(hasViews ? {
+          y1: {
+            type: 'linear', position: 'right',
+            ticks: { color: '#888' }, grid: { drawOnChartArea: false },
+            title: { display: true, text: '조회수', color: '#888' },
+          }
+        } : {}),
+      },
+    },
+  });
+}
+
+function backFromPostDetail() {
+  const backView = AppState._postDetailBackView || 'dashboard';
+  switchView(backView);
 }

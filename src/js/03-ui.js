@@ -17,7 +17,9 @@ function switchView(viewName) {
     'content-analysis': renderContentAnalysis,
     'time-analysis': renderTimeAnalysis,
     'cross-platform': renderCrossPlatform,
+    'trends': renderTrends,
     'posts': renderPosts,
+    'dm': renderDM,
     'collection': renderCollection,
     'settings': renderSettings,
   };

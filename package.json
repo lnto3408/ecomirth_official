@@ -1,15 +1,19 @@
 {
   "name": "card-news-sns-analyzer",
+  "productName": "SNS Analyzer",
   "version": "1.0.0",
   "description": "카드뉴스 SNS 분석 대시보드",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
-    "dev": "electron . --dev"
+    "dev": "electron . --dev",
+    "restart": "pkill -f 'card-news-sns-analyzer/node_modules/electron' 2>/dev/null; sleep 1; electron ."
   },
   "dependencies": {
     "better-sqlite3": "^11.0.0",
     "chart.js": "^4.4.0",
-    "electron": "^33.0.0"
+    "electron": "^33.0.0",
+    "google-trends-api": "^4.9.2",
+    "rss-parser": "^3.13.0"
   }
 }

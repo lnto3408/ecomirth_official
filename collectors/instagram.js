@@ -3,13 +3,14 @@
 
 const BASE_URL = 'https://graph.instagram.com/v21.0';
 
-async function collect(config, db, fetchJson) {
+async function collect(config, db, fetchJson, matchCategory) {
   if (!config?.accessToken || !config?.accountId) {
     throw new Error('Instagram API 토큰 또는 accountId가 설정되지 않았습니다. card-news-maker 설정을 확인하세요.');
   }
 
   const { accessToken, accountId } = config;
-  let postsUpdated = 0;
+  let newPosts = 0;
+  let updatedPosts = 0;
 
   // 1. Fetch media list
   const mediaResp = await fetchJson(
@@ -21,18 +22,20 @@ async function collect(config, db, fetchJson) {
   for (const media of mediaList) {
     let post = db.getPostByPlatformId('instagram', media.id);
 
-    if (!post) {
+    const isNew = !post;
+    if (isNew) {
       const hashtags = (media.caption || '').match(/#[\w\uAC00-\uD7A3]+/g) || [];
       const postId = db.addPost({
         platform: 'instagram',
         platform_post_id: media.id,
         caption: media.caption || '',
         hashtags,
-        category: 'other',
+        category: (matchCategory && matchCategory(media.caption, 'instagram')) || 'other',
         posted_at: media.timestamp || new Date().toISOString(),
         slide_count: media.media_type === 'CAROUSEL_ALBUM' ? 0 : 1,
       });
       post = { id: postId };
+      newPosts++;
     }
 
     // 2. Fetch media insights
@@ -55,14 +58,14 @@ async function collect(config, db, fetchJson) {
         views: metricsMap.total_interactions || 0,
       });
 
-      postsUpdated++;
+      if (!isNew) updatedPosts++;
     } catch (err) {
       // Basic metrics without insights
       db.addMetrics(post.id, {
         likes: media.like_count || 0,
         comments: media.comments_count || 0,
       });
-      postsUpdated++;
+      if (!isNew) updatedPosts++;
     }
   }
 
@@ -81,7 +84,11 @@ async function collect(config, db, fetchJson) {
     console.error('Instagram account stats error:', err.message);
   }
 
-  return { message: `Instagram: ${postsUpdated}개 포스트 수집 완료`, postsUpdated };
+  const parts = [];
+  if (newPosts > 0) parts.push(`${newPosts}개 신규`);
+  if (updatedPosts > 0) parts.push(`${updatedPosts}개 업데이트`);
+  const msg = parts.length > 0 ? parts.join(', ') : '변경 없음';
+  return { message: `Instagram: ${msg}`, postsUpdated: newPosts };
 }
 
 module.exports = { collect };

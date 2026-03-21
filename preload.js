@@ -28,6 +28,9 @@ contextBridge.exposeInMainWorld('api', {
   collect: (platform) => ipcRenderer.invoke('collect', platform),
   getCollectionLogs: (limit) => ipcRenderer.invoke('get-collection-logs', limit),
 
+  // Category sync
+  syncCategories: () => ipcRenderer.invoke('sync-categories'),
+
   // Settings
   getTokenStatus: () => ipcRenderer.invoke('get-token-status'),
   saveAnalyzerSettings: (settings) => ipcRenderer.invoke('save-analyzer-settings', settings),
@@ -35,4 +38,30 @@ contextBridge.exposeInMainWorld('api', {
 
   // Export
   exportData: (format) => ipcRenderer.invoke('export-data', format),
+
+  // Trends
+  // Google Trends API는 프론트에서 호출 금지 — 백그라운드 스케줄러 전용
+  fetchNaverTrend: (keywordGroups, days) => ipcRenderer.invoke('fetch-naver-trend', keywordGroups, days),
+  fetchNaverNews: (query, display) => ipcRenderer.invoke('fetch-naver-news', query, display),
+  getTrendSnapshot: (source) => ipcRenderer.invoke('get-trend-snapshot', source),
+  getTrendSnapshots: (source, limit) => ipcRenderer.invoke('get-trend-snapshots', source, limit),
+  fetchNaverShopping: (category, days) => ipcRenderer.invoke('fetch-naver-shopping', category, days),
+  fetchHotTopics: () => ipcRenderer.invoke('fetch-hot-topics'),
+  fetchYoutubeTrending: () => ipcRenderer.invoke('fetch-youtube-trending'),
+  fetchPolicyFeeds: () => ipcRenderer.invoke('fetch-policy-feeds'),
+  fetchNewsFeeds: () => ipcRenderer.invoke('fetch-news-feeds'),
+
+  // DM / Webhook
+  startWebhook: () => ipcRenderer.invoke('start-webhook'),
+  stopWebhook: () => ipcRenderer.invoke('stop-webhook'),
+  getWebhookPort: () => ipcRenderer.invoke('get-webhook-port'),
+  sendInstagramDM: (recipientId, text) => ipcRenderer.invoke('send-instagram-dm', recipientId, text),
+  getInstagramConversations: () => ipcRenderer.invoke('get-instagram-conversations'),
+  getInstagramMessages: (conversationId) => ipcRenderer.invoke('get-instagram-messages', conversationId),
+
+  // Events
+  onAutoCollectDone: (callback) => ipcRenderer.on('auto-collect-done', callback),
+  onTrendAlert: (callback) => ipcRenderer.on('trend-alert', (_, keywords) => callback(keywords)),
+  onDMReceived: (callback) => ipcRenderer.on('dm-received', (_, msg) => callback(msg)),
+  onCommentReceived: (callback) => ipcRenderer.on('comment-received', (_, comment) => callback(comment)),
 });

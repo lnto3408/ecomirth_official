@@ -39,11 +39,22 @@
           <line x1="2" y1="8.5" x2="12" y2="15.5"/>
         </svg>
       </button>
+      <button class="sidebar-btn" data-view="trends" title="트렌드 분석">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/>
+          <polyline points="17 6 23 6 23 12"/>
+        </svg>
+      </button>
       <button class="sidebar-btn" data-view="posts" title="포스트 관리">
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
           <polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/>
           <line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/>
+        </svg>
+      </button>
+      <button class="sidebar-btn" data-view="dm" title="DM 관리">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/>
         </svg>
       </button>
       <button class="sidebar-btn" data-view="collection" title="데이터 수집">
@@ -72,7 +83,9 @@
     <main id="view-content-analysis" class="view" data-view="content-analysis"></main>
     <main id="view-time-analysis" class="view" data-view="time-analysis"></main>
     <main id="view-cross-platform" class="view" data-view="cross-platform"></main>
+    <main id="view-trends" class="view" data-view="trends"></main>
     <main id="view-posts" class="view" data-view="posts"></main>
+    <main id="view-dm" class="view" data-view="dm"></main>
     <main id="view-collection" class="view" data-view="collection"></main>
     <main id="view-settings" class="view" data-view="settings"></main>
   </div>
@@ -87,6 +100,8 @@
   <script src="js/08-posts.js"></script>
   <script src="js/09-collection.js"></script>
   <script src="js/10-settings.js"></script>
+  <script src="js/12-trends.js"></script>
+  <script src="js/13-dm.js"></script>
   <script src="js/11-init.js"></script>
 </body>
 </html>

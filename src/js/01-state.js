@@ -3,6 +3,7 @@ const AppState = {
   currentView: 'dashboard',
   charts: {},          // Chart.js instances by id
   dashboardPeriod: 30, // 7, 30, 90
+  postPerformanceSort: 'time', // 'time' | 'likes' | 'comments' | 'shares' | 'total'
   contentPlatform: 'all',
   timePlatform: 'all',
   tokenStatus: null,

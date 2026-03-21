@@ -17,8 +17,12 @@ async function renderContentAnalysis() {
   const platforms = platform === 'all' ? PLATFORMS : [platform];
   const allStats = [];
   for (const p of platforms) {
-    const stats = await window.api.getCategoryStats(p, 90);
-    allStats.push(...stats.map(s => ({ ...s, platform: p })));
+    try {
+      const stats = await window.api.getCategoryStats(p, 90);
+      allStats.push(...stats.map(s => ({ ...s, platform: p })));
+    } catch (err) {
+      console.error(`getCategoryStats(${p}) 실패:`, err.message);
+    }
   }
 
   // Merge by category if showing all platforms
@@ -46,6 +50,7 @@ async function renderContentAnalysis() {
   }));
 
   const body = document.getElementById('content-analysis-body');
+  if (!body) return;
 
   if (!merged.length) {
     body.innerHTML = emptyState(
@@ -96,7 +101,9 @@ async function renderContentAnalysis() {
   // Category engagement chart
   destroyChart('chart-category-engagement');
   const cats = merged.map(c => CATEGORY_LABELS[c.category] || c.category);
-  AppState.charts['chart-category-engagement'] = new Chart(document.getElementById('chart-category-engagement'), {
+  const engCtx = document.getElementById('chart-category-engagement');
+  if (!engCtx) return;
+  AppState.charts['chart-category-engagement'] = new Chart(engCtx, {
     type: 'bar',
     data: {
       labels: cats,
@@ -114,7 +121,9 @@ async function renderContentAnalysis() {
 
   // Category count chart
   destroyChart('chart-category-count');
-  AppState.charts['chart-category-count'] = new Chart(document.getElementById('chart-category-count'), {
+  const countCtx = document.getElementById('chart-category-count');
+  if (!countCtx) return;
+  AppState.charts['chart-category-count'] = new Chart(countCtx, {
     type: 'doughnut',
     data: {
       labels: cats,
@@ -126,6 +135,8 @@ async function renderContentAnalysis() {
   // Platform x Category comparison
   if (platform === 'all') {
     destroyChart('chart-platform-category');
+    const platCatCtx = document.getElementById('chart-platform-category');
+    if (!platCatCtx) return;
     const datasets = PLATFORMS.map(p => {
       const pStats = allStats.filter(s => s.platform === p);
       return {
@@ -137,7 +148,7 @@ async function renderContentAnalysis() {
         backgroundColor: PLATFORM_COLORS[p] + '88',
       };
     });
-    AppState.charts['chart-platform-category'] = new Chart(document.getElementById('chart-platform-category'), {
+    AppState.charts['chart-platform-category'] = new Chart(platCatCtx, {
       type: 'bar',
       data: { labels: CATEGORIES.map(c => CATEGORY_LABELS[c]), datasets },
       options: { ...chartOptions('평균 좋아요'), scales: { x: { ticks: { color: '#888' }, grid: { display: false } }, y: { ticks: { color: '#888' }, grid: { color: '#2a2a2a' } } } },

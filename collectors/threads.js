@@ -3,13 +3,14 @@
 
 const BASE_URL = 'https://graph.threads.net/v1.0';
 
-async function collect(config, db, fetchJson) {
+async function collect(config, db, fetchJson, matchCategory) {
   if (!config?.accessToken || !config?.userId) {
     throw new Error('Threads API 토큰 또는 userId가 설정되지 않았습니다. card-news-maker 설정을 확인하세요.');
   }
 
   const { accessToken, userId } = config;
-  let postsUpdated = 0;
+  let newPosts = 0;
+  let updatedPosts = 0;
 
   // 1. Fetch threads list
   const threadsResp = await fetchJson(
@@ -22,19 +23,20 @@ async function collect(config, db, fetchJson) {
     // Check if post already exists
     let post = db.getPostByPlatformId('threads', thread.id);
 
-    if (!post) {
-      // Extract hashtags from text
+    const isNew = !post;
+    if (isNew) {
       const hashtags = (thread.text || '').match(/#[\w\uAC00-\uD7A3]+/g) || [];
       const postId = db.addPost({
         platform: 'threads',
         platform_post_id: thread.id,
         caption: thread.text || '',
         hashtags,
-        category: 'other',
+        category: (matchCategory && matchCategory(thread.text, 'threads')) || 'other',
         posted_at: thread.timestamp || new Date().toISOString(),
         slide_count: thread.media_type === 'CAROUSEL_ALBUM' ? 0 : 1,
       });
       post = { id: postId };
+      newPosts++;
     }
 
     // 2. Fetch insights for each thread
@@ -56,7 +58,7 @@ async function collect(config, db, fetchJson) {
         saves: metricsMap.quotes || 0,
       });
 
-      postsUpdated++;
+      if (!isNew) updatedPosts++;
     } catch (err) {
       // Some posts may not have insights (too old, etc.)
       console.error(`Threads insights error for ${thread.id}:`, err.message);
@@ -81,7 +83,11 @@ async function collect(config, db, fetchJson) {
     console.error('Threads profile insights error:', err.message);
   }
 
-  return { message: `Threads: ${postsUpdated}개 포스트 수집 완료`, postsUpdated };
+  const parts = [];
+  if (newPosts > 0) parts.push(`${newPosts}개 신규`);
+  if (updatedPosts > 0) parts.push(`${updatedPosts}개 업데이트`);
+  const msg = parts.length > 0 ? parts.join(', ') : '변경 없음';
+  return { message: `Threads: ${msg}`, postsUpdated: newPosts };
 }
 
 module.exports = { collect };
