@@ -49,7 +49,7 @@ contextBridge.exposeInMainWorld('api', {
   getTrendSnapshots: (source, limit) => ipcRenderer.invoke('get-trend-snapshots', source, limit),
   fetchNaverShopping: (category, days) => ipcRenderer.invoke('fetch-naver-shopping', category, days),
   fetchHotTopics: () => ipcRenderer.invoke('fetch-hot-topics'),
-  fetchYoutubeTrending: () => ipcRenderer.invoke('fetch-youtube-trending'),
+  fetchYoutubeTrending: (regionCode) => ipcRenderer.invoke('fetch-youtube-trending', regionCode),
   fetchPolicyFeeds: () => ipcRenderer.invoke('fetch-policy-feeds'),
   fetchNewsFeeds: () => ipcRenderer.invoke('fetch-news-feeds'),
 

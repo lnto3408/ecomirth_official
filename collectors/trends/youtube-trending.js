@@ -6,10 +6,10 @@ const https = require('https');
  * @param {string} apiKey - YouTube Data API v3 key
  * @param {number} maxResults - 최대 결과 수 (기본 20, 최대 50)
  */
-async function getTrendingVideos(apiKey, maxResults = 20) {
+async function getTrendingVideos(apiKey, maxResults = 20, regionCode = 'KR') {
   if (!apiKey) throw new Error('YouTube API 키가 설정되지 않았습니다');
 
-  const url = `https://www.googleapis.com/youtube/v3/videos?part=snippet,statistics&chart=mostPopular&regionCode=KR&maxResults=${maxResults}&key=${apiKey}`;
+  const url = `https://www.googleapis.com/youtube/v3/videos?part=snippet,statistics&chart=mostPopular&regionCode=${regionCode}&maxResults=${maxResults}&key=${apiKey}`;
 
   return new Promise((resolve, reject) => {
     https.get(url, (res) => {

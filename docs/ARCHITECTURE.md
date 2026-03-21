@@ -49,8 +49,15 @@ card-news-sns-analyzer/
 │       ├── 09-collection.js   # 데이터 수집 트리거/상태
 │       ├── 10-settings.js     # API 토큰, 카테고리, 스케줄러
 │       ├── 11-init.js         # 초기화
-│       └── 12-trends.js       # 트렌드 분석 뷰
-└── docs/                      # 프로젝트 문서 (Obsidian 볼트)
+│       ├── 12-trends.js       # 트렌드 분석 뷰
+│       ├── 13-dm.js           # DM 관리 (자동 DM, 대화 뷰)
+│       └── 14-report.js       # 주간 리포트
+├── webhook-server.js          # Instagram DM webhook 서버 (port 3847)
+└── docs/                      # 프로젝트 문서
+    ├── guides/USER-GUIDE.md   # 사용자 가이드
+    ├── ARCHITECTURE.md        # 기술 아키텍처
+    ├── TREND-ANALYSIS-ROADMAP.md # 트렌드 기능 로드맵
+    └── INSTAGRAM-DM.md        # DM 기능 문서
 ```
 
 ## DB 스키마

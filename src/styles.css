@@ -501,6 +501,7 @@ textarea.input-field { resize: vertical; min-height: 60px; }
 /* ── Trends ── */
 .trends-grid { display: grid; grid-template-columns: 1fr 1.5fr; gap: 16px; }
 
+.trends-realtime { min-height: 700px; }
 .trend-list { max-height: 600px; min-height: 600px; overflow-y: auto; }
 .trend-item {
   display: flex; align-items: center; gap: 10px;

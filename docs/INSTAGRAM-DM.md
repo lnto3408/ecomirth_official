@@ -46,11 +46,11 @@ Electron main process → IPC → renderer (dm-received 이벤트)
 - [x] 댓글 webhook 처리 (`comments` 이벤트 수신 + 자동 DM 발송)
 - [x] DM 알림 (수신 시 toast)
 
-### 미완료 (향후 진행)
-- [ ] `@toechon` 테스터 등록 → 실제 DM 수신 테스트
-- [ ] Meta Dashboard에서 `comments` webhook 구독 활성화
-- [ ] 앱 검수 제출 (`instagram_manage_messages` + `instagram_manage_comments`)
-- [ ] ngrok → 고정 도메인 전환 (무료 1개 가능)
+### 진행 중
+- [x] Meta Dashboard에서 `comments` + `messages` webhook 구독 활성화 완료
+- [ ] 앱 검수 제출 진행 중 (instagram_manage_messages + instagram_manage_comments + instagram_content_publish 등 8개 권한)
+- [ ] 검수 승인 후 실제 DM 수신 테스트
+- [ ] ngrok 고정 도메인 claim (dashboard.ngrok.com → Domains)
 
 ## 제약사항
 

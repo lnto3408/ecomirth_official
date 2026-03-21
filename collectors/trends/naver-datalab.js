@@ -139,14 +139,11 @@ async function getShoppingTrend(credentials, category, days = 30) {
     startDate: formatDate(startDate),
     endDate: formatDate(endDate),
     timeUnit: days <= 7 ? 'date' : 'week',
-    category,
-    device: '',
-    gender: '',
-    ages: [],
+    category: [{ name: '카테고리', param: [category] }],
   });
 
   return new Promise((resolve, reject) => {
-    const req = https.request('https://openapi.naver.com/v1/datalab/shopping/category/keywords', {
+    const req = https.request('https://openapi.naver.com/v1/datalab/shopping/categories', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

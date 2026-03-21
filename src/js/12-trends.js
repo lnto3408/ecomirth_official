@@ -60,12 +60,12 @@ async function renderTrends() {
             ).join('')}
           </div>
         </div>
-        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">
+        <div class="tab-bar" style="margin-bottom:8px;flex-wrap:wrap;gap:4px" id="naver-keyword-tabs">
           ${Object.entries(TREND_CATEGORIES).map(([cat, kws]) =>
-            `<button class="keyword-preset-btn" onclick="applyKeywordPreset('${kws.slice(0,5).join(',')}')">${TREND_CAT_LABELS[cat] || cat}</button>`
+            `<button class="tab-btn" onclick="changeNaverKeywordTab('${cat}', '${kws.slice(0,5).join(',')}', this)">${TREND_CAT_LABELS[cat] || cat}</button>`
           ).join('')}
-          <button class="keyword-preset-btn" onclick="applyHotTopicPreset()" style="border-color:var(--accent)">핫토픽</button>
-          <button class="keyword-preset-btn" id="btn-load-favorites" onclick="loadFavoriteKeywords()" style="border-color:var(--warning)">★ 즐겨찾기</button>
+          <button class="tab-btn" onclick="applyHotTopicPreset(); this.closest('.tab-bar').querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active')); this.classList.add('active');" style="color:var(--accent)">핫토픽</button>
+          <button class="tab-btn" onclick="loadFavoriteKeywords(); this.closest('.tab-bar').querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active')); this.classList.add('active');" style="color:var(--warning)">★ 즐겨찾기</button>
         </div>
         <div class="inline-form" style="margin-bottom:12px">
           <input class="input-field" id="trend-keyword-input" placeholder="키워드 입력 (쉼표 구분, 최대 5개)" style="flex:1" value="AI,부동산,주식,건강,정책">
@@ -130,8 +130,12 @@ async function renderTrends() {
     <!-- Row 4: YouTube Trending -->
     <div class="card" style="margin-top:16px">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
-        <div class="card-title" style="margin:0">YouTube 인기 동영상 (한국)</div>
-        <button class="btn-secondary btn-small" onclick="loadYoutubeTrending()">새로고침</button>
+        <div class="card-title" style="margin:0">YouTube 인기 동영상</div>
+      </div>
+      <div class="tab-bar" style="margin-bottom:12px;flex-wrap:wrap;gap:4px">
+        ${[['KR','한국'],['US','미국'],['JP','일본'],['GB','영국'],['IN','인도'],['BR','브라질'],['VN','베트남'],['TH','태국']].map(([code,label]) =>
+          `<button class="tab-btn ${code==='KR'?'active':''}" onclick="changeYtRegion('${code}', this)">${label}</button>`
+        ).join('')}
       </div>
       <div id="trends-youtube">
         <div style="text-align:center;padding:20px;color:var(--text-dim)">YouTube API 키를 설정하면 인기 동영상을 확인할 수 있습니다.</div>
@@ -140,18 +144,11 @@ async function renderTrends() {
 
     <!-- Row 5: 네이버 쇼핑 트렌드 -->
     <div class="card" style="margin-top:16px">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
-        <div class="card-title" style="margin:0">네이버 쇼핑 인기 키워드</div>
-        <select class="input-field" style="width:150px" onchange="loadShoppingTrend(this.value)">
-          <option value="50000000">패션의류</option>
-          <option value="50000001">패션잡화</option>
-          <option value="50000003">디지털/가전</option>
-          <option value="50000004">가구/인테리어</option>
-          <option value="50000005">출산/육아</option>
-          <option value="50000006">식품</option>
-          <option value="50000002">화장품/미용</option>
-          <option value="50000008">스포츠/레저</option>
-        </select>
+      <div class="card-title" style="margin-bottom:8px">네이버 쇼핑 인기 키워드</div>
+      <div class="tab-bar" style="margin-bottom:12px;flex-wrap:wrap;gap:4px">
+        ${[['50000000','패션의류'],['50000001','패션잡화'],['50000003','디지털/가전'],['50000004','가구/인테리어'],['50000005','출산/육아'],['50000006','식품'],['50000002','화장품/미용'],['50000008','스포츠/레저']].map(([code,label], i) =>
+          `<button class="tab-btn ${i===0?'active':''}" onclick="changeShoppingTab('${code}', this)">${label}</button>`
+        ).join('')}
       </div>
       <div id="trends-shopping">
         <div style="padding:16px;color:var(--text-dim);font-size:13px;text-align:center">카테고리를 선택하면 인기 키워드가 표시됩니다. (네이버 API 키 필요)</div>
@@ -359,7 +356,7 @@ async function searchNaverTrend() {
   // 캐시 확인 (10분 유효)
   const key = _cacheKey(keywords, _trendPeriod);
   const cached = _trendCache[key];
-  if (cached && (Date.now() - cached.time) < 10 * 60 * 1000) {
+  if (cached && (Date.now() - cached.time) < 30 * 60 * 1000) {
     renderNaverTrendChart(cached.data, chartContainer);
     renderKeywordInsight(cached.data, insightContainer);
     return;
@@ -769,26 +766,52 @@ async function generateRecommendations() {
 
 // ── YouTube Trending ──
 
-async function loadYoutubeTrending() {
+const _ytCache = {}; // 국가별 캐시
+
+function changeYtRegion(code, btn) {
+  document.querySelectorAll('.card .tab-bar .tab-btn').forEach(b => {
+    if (b.parentElement.nextElementSibling?.id === 'trends-youtube') return;
+  });
+  // 이 카드 내 탭만 토글
+  if (btn) {
+    btn.closest('.tab-bar').querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+  }
+  loadYoutubeTrending(code);
+}
+
+async function loadYoutubeTrending(regionCode) {
   const container = document.getElementById('trends-youtube');
   if (!container) return;
 
-  try {
-    // Try cached first
-    let snapshot = await window.api.getTrendSnapshot('youtube');
-    const isFresh = snapshot && (Date.now() - new Date(snapshot.collected_at).getTime()) < 60 * 60 * 1000;
+  const region = regionCode || 'KR';
 
-    if (!isFresh) {
-      const result = await window.api.fetchYoutubeTrending();
-      if (result.success) {
-        snapshot = { data: result.data, collected_at: new Date().toISOString() };
-      } else if (!snapshot) {
-        container.innerHTML = `<div style="padding:12px;color:var(--text-dim);font-size:13px">${result.message}</div>`;
-        return;
-      }
+  try {
+    // 국가별 캐시 확인 (30분)
+    const cached = _ytCache[region];
+    if (cached && (Date.now() - cached.time) < 30 * 60 * 1000) {
+      renderYoutubeTrending(container, cached.data);
+      return;
     }
 
-    renderYoutubeTrending(container, snapshot.data);
+    // DB 캐시도 확인 (기본 KR만)
+    let snapshot = (!regionCode || region === 'KR') ? await window.api.getTrendSnapshot('youtube') : null;
+    const isFresh = snapshot && (Date.now() - new Date(snapshot.collected_at).getTime()) < 30 * 60 * 1000;
+
+    if (isFresh) {
+      _ytCache[region] = { data: snapshot.data, time: Date.now() };
+      renderYoutubeTrending(container, snapshot.data);
+      return;
+    }
+
+    container.innerHTML = '<div style="text-align:center;padding:16px"><span class="spinner"></span></div>';
+    const result = await window.api.fetchYoutubeTrending(region);
+    if (result.success) {
+      _ytCache[region] = { data: result.data, time: Date.now() };
+      renderYoutubeTrending(container, result.data);
+    } else {
+      container.innerHTML = `<div style="padding:12px;color:var(--text-dim);font-size:13px">${result.message}</div>`;
+    }
   } catch (err) {
     container.innerHTML = `<div style="padding:12px;color:var(--text-dim);font-size:13px">오류: ${err.message}</div>`;
   }
@@ -823,9 +846,26 @@ function renderYoutubeTrending(container, videos) {
 
 // ── Naver Shopping Trend ──
 
+const _shoppingCache = {};
+
+function changeShoppingTab(code, btn) {
+  if (btn) {
+    btn.closest('.tab-bar').querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+  }
+  loadShoppingTrend(code);
+}
+
 async function loadShoppingTrend(category) {
   const container = document.getElementById('trends-shopping');
   if (!container) return;
+
+  // 30분 캐시
+  const cached = _shoppingCache[category];
+  if (cached && (Date.now() - cached.time) < 30 * 60 * 1000) {
+    container.innerHTML = cached.html;
+    return;
+  }
 
   container.innerHTML = '<div style="text-align:center;padding:16px"><span class="spinner"></span></div>';
 
@@ -842,7 +882,7 @@ async function loadShoppingTrend(category) {
     }
 
     const keywords = result.data[0]?.data || [];
-    container.innerHTML = `
+    const html = `
       <div style="display:flex;flex-wrap:wrap;gap:6px">
         ${keywords.slice(0, 20).map((kw, i) => `
           <span class="keyword-tag" style="font-size:12px;padding:4px 10px" onclick="exploreTrendKeyword('${(kw.period || kw.keyword || '').replace(/'/g, "\\'")}')">
@@ -852,6 +892,8 @@ async function loadShoppingTrend(category) {
         `).join('')}
       </div>
     `;
+    container.innerHTML = html;
+    _shoppingCache[category] = { html, time: Date.now() };
   } catch (err) {
     container.innerHTML = `<div style="padding:12px;color:var(--text-dim);font-size:13px">오류: ${err.message}</div>`;
   }
@@ -985,6 +1027,14 @@ async function showTrendHistory() {
 }
 
 // ── Keyword Presets & Favorites ──
+
+function changeNaverKeywordTab(cat, keywords, btn) {
+  if (btn) {
+    btn.closest('.tab-bar').querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+  }
+  applyKeywordPreset(keywords);
+}
 
 function applyKeywordPreset(keywords) {
   const input = document.getElementById('trend-keyword-input');

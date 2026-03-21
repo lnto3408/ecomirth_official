@@ -392,11 +392,11 @@ app.whenReady().then(() => {
   ipcMain.handle('get-trend-snapshots', (_, source, limit) => db.getRecentTrendSnapshots(source, limit || 10));
 
   // YouTube Trending
-  ipcMain.handle('fetch-youtube-trending', async () => {
+  ipcMain.handle('fetch-youtube-trending', async (_, regionCode) => {
     try {
       const settings = loadAnalyzerSettings();
       const apiKey = settings.youtubeApiKey;
-      const videos = await youtubeTrending.getTrendingVideos(apiKey, 20);
+      const videos = await youtubeTrending.getTrendingVideos(apiKey, 20, regionCode || 'KR');
       db.saveTrendSnapshot('youtube', videos);
       const keywords = youtubeTrending.extractVideoKeywords(videos);
       return { success: true, data: videos, keywords };
