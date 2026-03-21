@@ -154,6 +154,179 @@ async function renderContentAnalysis() {
       options: { ...chartOptions('평균 좋아요'), scales: { x: { ticks: { color: '#888' }, grid: { display: false } }, y: { ticks: { color: '#888' }, grid: { color: '#2a2a2a' } } } },
     });
   }
+
+  // Hashtag analysis section
+  await renderHashtagAnalysis(body, platform);
+}
+
+async function renderHashtagAnalysis(container, platform) {
+  const platforms = platform === 'all' ? PLATFORMS : [platform];
+  const allHashtags = {};
+  const allPairs = {};
+
+  for (const p of platforms) {
+    try {
+      const result = await window.api.getHashtagStats(p, 90);
+      for (const h of result.hashtags) {
+        const key = h.hashtag.toLowerCase();
+        if (!allHashtags[key]) {
+          allHashtags[key] = { hashtag: h.hashtag, count: 0, total_likes: 0, total_views: 0, total_engagement: 0 };
+        }
+        allHashtags[key].count += h.count;
+        allHashtags[key].total_likes += h.avg_likes * h.count;
+        allHashtags[key].total_views += h.avg_views * h.count;
+        allHashtags[key].total_engagement += h.avg_engagement * h.count;
+      }
+      for (const p2 of result.pairs) {
+        if (!allPairs[p2.pair]) {
+          allPairs[p2.pair] = { pair: p2.pair, count: 0, total_engagement: 0 };
+        }
+        allPairs[p2.pair].count += p2.count;
+        allPairs[p2.pair].total_engagement += p2.avg_engagement * p2.count;
+      }
+    } catch (err) {
+      console.error(`getHashtagStats(${p}) 실패:`, err.message);
+    }
+  }
+
+  const hashtags = Object.values(allHashtags).map(h => ({
+    hashtag: h.hashtag,
+    count: h.count,
+    avg_likes: h.count ? Math.round(h.total_likes / h.count) : 0,
+    avg_views: h.count ? Math.round(h.total_views / h.count) : 0,
+    avg_engagement: h.count ? Math.round(h.total_engagement / h.count) : 0,
+  })).sort((a, b) => b.avg_engagement - a.avg_engagement);
+
+  const pairs = Object.values(allPairs).map(p => ({
+    pair: p.pair,
+    count: p.count,
+    avg_engagement: p.count ? Math.round(p.total_engagement / p.count) : 0,
+  })).sort((a, b) => b.avg_engagement - a.avg_engagement).slice(0, 10);
+
+  if (!hashtags.length) return;
+
+  const top10 = hashtags.slice(0, 10);
+
+  const section = document.createElement('div');
+  section.innerHTML = `
+    <div class="section-divider">
+      <h2 class="section-title">해시태그 성과 분석</h2>
+    </div>
+    <div class="grid-2">
+      <div class="card">
+        <div class="card-title">TOP 10 해시태그 (평균 참여도)</div>
+        <div class="chart-container tall"><canvas id="chart-hashtag-engagement"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="card-title">베스트 해시태그 조합</div>
+        ${pairs.length ? `
+        <table class="data-table">
+          <thead><tr>
+            <th>해시태그 조합</th><th class="num">포스트</th><th class="num">평균 참여도</th>
+          </tr></thead>
+          <tbody>
+            ${pairs.map(p => `<tr>
+              <td class="hashtag-pair-cell">${p.pair}</td>
+              <td class="num">${p.count}</td>
+              <td class="num">${formatNumber(p.avg_engagement)}</td>
+            </tr>`).join('')}
+          </tbody>
+        </table>
+        ` : '<div style="padding:24px;text-align:center;color:var(--text-dim)">2회 이상 함께 사용된 조합이 없습니다.</div>'}
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">해시태그별 상세 성과</div>
+      <div class="hashtag-table-scroll">
+        <table class="data-table" id="hashtag-stats-table">
+          <thead><tr>
+            <th data-sort="hashtag">해시태그</th>
+            <th class="num" data-sort="count">포스트</th>
+            <th class="num" data-sort="avg_likes">평균 좋아요</th>
+            <th class="num" data-sort="avg_views">평균 조회</th>
+            <th class="num" data-sort="avg_engagement">평균 참여도</th>
+          </tr></thead>
+          <tbody>
+            ${hashtags.slice(0, 20).map(h => `<tr>
+              <td><span class="hashtag-badge">${h.hashtag}</span></td>
+              <td class="num">${h.count}</td>
+              <td class="num">${formatNumber(h.avg_likes)}</td>
+              <td class="num">${formatNumber(h.avg_views)}</td>
+              <td class="num">${formatNumber(h.avg_engagement)}</td>
+            </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  `;
+  container.appendChild(section);
+
+  // Hashtag engagement bar chart
+  destroyChart('chart-hashtag-engagement');
+  const engCtx = document.getElementById('chart-hashtag-engagement');
+  if (!engCtx) return;
+
+  const barColors = top10.map((_, i) => {
+    const colors = ['#4a9eff', '#4caf50', '#ff9800', '#e1306c', '#9c27b0', '#00bcd4', '#ff5722', '#8bc34a', '#ffc107', '#607d8b'];
+    return colors[i % colors.length] + 'cc';
+  });
+
+  AppState.charts['chart-hashtag-engagement'] = new Chart(engCtx, {
+    type: 'bar',
+    data: {
+      labels: top10.map(h => h.hashtag),
+      datasets: [{
+        label: '평균 참여도',
+        data: top10.map(h => h.avg_engagement),
+        backgroundColor: barColors,
+        borderRadius: 4,
+      }]
+    },
+    options: {
+      ...chartOptions(''),
+      indexAxis: 'y',
+      plugins: {
+        legend: { display: false },
+        tooltip: { backgroundColor: '#1a1a1a', borderColor: '#2a2a2a', borderWidth: 1, titleColor: '#fff', bodyColor: '#e0e0e0' },
+      },
+      scales: {
+        x: { ticks: { color: '#888' }, grid: { color: '#2a2a2a' } },
+        y: { ticks: { color: '#ccc', font: { size: 12 } }, grid: { display: false } },
+      },
+    },
+  });
+
+  // Sortable headers
+  const table = document.getElementById('hashtag-stats-table');
+  if (table) {
+    let currentSort = { key: 'avg_engagement', asc: false };
+    table.querySelectorAll('th[data-sort]').forEach(th => {
+      th.style.cursor = 'pointer';
+      th.addEventListener('click', () => {
+        const key = th.dataset.sort;
+        if (currentSort.key === key) currentSort.asc = !currentSort.asc;
+        else { currentSort.key = key; currentSort.asc = false; }
+
+        const sorted = [...hashtags].sort((a, b) => {
+          const va = a[key], vb = b[key];
+          if (typeof va === 'string') return currentSort.asc ? va.localeCompare(vb) : vb.localeCompare(va);
+          return currentSort.asc ? va - vb : vb - va;
+        });
+
+        const tbody = table.querySelector('tbody');
+        tbody.innerHTML = sorted.slice(0, 20).map(h => `<tr>
+          <td><span class="hashtag-badge">${h.hashtag}</span></td>
+          <td class="num">${h.count}</td>
+          <td class="num">${formatNumber(h.avg_likes)}</td>
+          <td class="num">${formatNumber(h.avg_views)}</td>
+          <td class="num">${formatNumber(h.avg_engagement)}</td>
+        </tr>`).join('');
+
+        table.querySelectorAll('th[data-sort]').forEach(t => t.classList.remove('sort-asc', 'sort-desc'));
+        th.classList.add(currentSort.asc ? 'sort-asc' : 'sort-desc');
+      });
+    });
+  }
 }
 
 function changeContentPlatform(platform) {

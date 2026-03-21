@@ -270,6 +270,69 @@ function getContentGroupComparison() {
   `).all();
 }
 
+// ── Hashtag Stats ──
+
+function getHashtagStats(platform, days = 90) {
+  const rows = db.prepare(`
+    SELECT p.id, p.hashtags, m.views, m.likes, m.comments, m.shares, m.saves
+    FROM posts p
+    LEFT JOIN metrics m ON m.id = (SELECT id FROM metrics WHERE post_id = p.id ORDER BY collected_at DESC LIMIT 1)
+    WHERE p.platform = ? AND p.posted_at >= date('now', '-' || ? || ' days')
+      AND p.hashtags IS NOT NULL AND p.hashtags != '[]'
+  `).all(platform, days);
+
+  const tagMap = {};
+  const pairMap = {};
+
+  for (const row of rows) {
+    let tags;
+    try { tags = JSON.parse(row.hashtags); } catch { continue; }
+    if (!Array.isArray(tags) || tags.length === 0) continue;
+
+    const engagement = (row.likes || 0) + (row.comments || 0) + (row.shares || 0) + (row.saves || 0);
+
+    for (const tag of tags) {
+      const t = tag.toLowerCase();
+      if (!tagMap[t]) tagMap[t] = { hashtag: tag, count: 0, total_likes: 0, total_views: 0, total_engagement: 0 };
+      tagMap[t].count++;
+      tagMap[t].total_likes += (row.likes || 0);
+      tagMap[t].total_views += (row.views || 0);
+      tagMap[t].total_engagement += engagement;
+    }
+
+    // Pair combinations
+    const sorted = [...new Set(tags.map(t => t.toLowerCase()))].sort();
+    for (let i = 0; i < sorted.length; i++) {
+      for (let j = i + 1; j < sorted.length; j++) {
+        const key = sorted[i] + ' + ' + sorted[j];
+        if (!pairMap[key]) pairMap[key] = { pair: key, count: 0, total_engagement: 0 };
+        pairMap[key].count++;
+        pairMap[key].total_engagement += engagement;
+      }
+    }
+  }
+
+  const hashtags = Object.values(tagMap).map(h => ({
+    hashtag: h.hashtag,
+    count: h.count,
+    avg_likes: h.count ? Math.round(h.total_likes / h.count) : 0,
+    avg_views: h.count ? Math.round(h.total_views / h.count) : 0,
+    avg_engagement: h.count ? Math.round(h.total_engagement / h.count) : 0,
+  })).sort((a, b) => b.avg_engagement - a.avg_engagement);
+
+  const pairs = Object.values(pairMap)
+    .filter(p => p.count >= 2)
+    .map(p => ({
+      pair: p.pair,
+      count: p.count,
+      avg_engagement: p.count ? Math.round(p.total_engagement / p.count) : 0,
+    }))
+    .sort((a, b) => b.avg_engagement - a.avg_engagement)
+    .slice(0, 10);
+
+  return { hashtags, pairs };
+}
+
 // ── Trends ──
 
 function saveTrendSnapshot(source, data) {
@@ -321,6 +384,6 @@ module.exports = {
   addMetrics, getLatestMetrics, getMetricsHistory,
   upsertAccountStats, getAccountStats, getLatestAccountStats,
   startCollection, completeCollection, getCollectionLogs,
-  getPostsWithLatestMetrics, getCategoryStats, getHourlyStats, getContentGroupComparison,
+  getPostsWithLatestMetrics, getCategoryStats, getHourlyStats, getContentGroupComparison, getHashtagStats,
   saveTrendSnapshot, getLatestTrendSnapshot, saveTrendKeywords, getTrendKeywords, getRecentTrendSnapshots
 };

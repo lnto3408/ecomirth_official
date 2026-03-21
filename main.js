@@ -284,6 +284,7 @@ app.whenReady().then(() => {
   ipcMain.handle('get-category-stats', (_, platform, days) => db.getCategoryStats(platform, days || 90));
   ipcMain.handle('get-hourly-stats', (_, platform, days) => db.getHourlyStats(platform, days || 90));
   ipcMain.handle('get-content-group-comparison', () => db.getContentGroupComparison());
+  ipcMain.handle('get-hashtag-stats', (_, platform, days) => db.getHashtagStats(platform, days || 90));
 
   // Collection
   ipcMain.handle('collect', (_, platform) => runCollector(platform));
@@ -310,6 +311,27 @@ app.whenReady().then(() => {
   ipcMain.handle('load-analyzer-settings', () => loadAnalyzerSettings());
 
   // Export
+  // PDF Report Export
+  ipcMain.handle('export-report', async (_, format) => {
+    try {
+      const { filePath } = await dialog.showSaveDialog(mainWindow, {
+        defaultPath: `sns-report-${new Date().toISOString().slice(0, 10)}.pdf`,
+        filters: [{ name: 'PDF', extensions: ['pdf'] }]
+      });
+      if (!filePath) return { success: false, message: 'Cancelled' };
+
+      const pdfData = await mainWindow.webContents.printToPDF({
+        printBackground: true,
+        pageSize: 'A4',
+        margins: { top: 0.5, bottom: 0.5, left: 0.5, right: 0.5 },
+      });
+      fs.writeFileSync(filePath, pdfData);
+      return { success: true, path: filePath };
+    } catch (err) {
+      return { success: false, message: err.message };
+    }
+  });
+
   ipcMain.handle('export-data', async (_, format) => {
     const posts = db.getPostsWithLatestMetrics();
     if (format === 'csv') {

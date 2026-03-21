@@ -22,6 +22,7 @@ function switchView(viewName) {
     'dm': renderDM,
     'collection': renderCollection,
     'settings': renderSettings,
+    'report': renderReport,
   };
   if (renderers[viewName]) renderers[viewName]();
 }

@@ -115,11 +115,15 @@ async function renderTrends() {
       </div>
 
       <div class="card trends-recommend">
-        <div class="card-title">콘텐츠 추천</div>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+          <div class="card-title" style="margin:0">콘텐츠 추천</div>
+          <button class="btn-secondary btn-small" onclick="generateAIContentIdeas()">AI 아이디어</button>
+        </div>
         <p style="font-size:11px;color:var(--text-dim);margin-bottom:12px">트렌드 키워드 + 내 포스트 성과를 교차 분석한 추천</p>
         <div id="trends-recommendations">
           <div style="text-align:center;padding:20px;color:var(--text-dim)">트렌드 데이터를 수집하면 추천이 표시됩니다.</div>
         </div>
+        <div id="trends-ai-ideas" style="margin-top:12px"></div>
       </div>
     </div>
 
@@ -134,7 +138,27 @@ async function renderTrends() {
       </div>
     </div>
 
-    <!-- Row 5: 트렌드 ↔ 콘텐츠 상관관계 -->
+    <!-- Row 5: 네이버 쇼핑 트렌드 -->
+    <div class="card" style="margin-top:16px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+        <div class="card-title" style="margin:0">네이버 쇼핑 인기 키워드</div>
+        <select class="input-field" style="width:150px" onchange="loadShoppingTrend(this.value)">
+          <option value="50000000">패션의류</option>
+          <option value="50000001">패션잡화</option>
+          <option value="50000003">디지털/가전</option>
+          <option value="50000004">가구/인테리어</option>
+          <option value="50000005">출산/육아</option>
+          <option value="50000006">식품</option>
+          <option value="50000002">화장품/미용</option>
+          <option value="50000008">스포츠/레저</option>
+        </select>
+      </div>
+      <div id="trends-shopping">
+        <div style="padding:16px;color:var(--text-dim);font-size:13px;text-align:center">카테고리를 선택하면 인기 키워드가 표시됩니다. (네이버 API 키 필요)</div>
+      </div>
+    </div>
+
+    <!-- Row 6: 트렌드 ↔ 콘텐츠 상관관계 -->
     <div class="card" style="margin-top:16px">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
         <div class="card-title" style="margin:0">트렌드 ↔ 콘텐츠 성과 상관관계</div>
@@ -797,6 +821,44 @@ function renderYoutubeTrending(container, videos) {
 
 // ── Refresh All ──
 
+// ── Naver Shopping Trend ──
+
+async function loadShoppingTrend(category) {
+  const container = document.getElementById('trends-shopping');
+  if (!container) return;
+
+  container.innerHTML = '<div style="text-align:center;padding:16px"><span class="spinner"></span></div>';
+
+  try {
+    const result = await window.api.fetchNaverShopping(category, 30);
+    if (!result.success) {
+      container.innerHTML = `<div style="padding:12px;color:var(--text-dim);font-size:13px">${result.message}</div>`;
+      return;
+    }
+
+    if (!result.data?.length) {
+      container.innerHTML = '<div style="padding:12px;color:var(--text-dim);font-size:13px">데이터 없음</div>';
+      return;
+    }
+
+    const keywords = result.data[0]?.data || [];
+    container.innerHTML = `
+      <div style="display:flex;flex-wrap:wrap;gap:6px">
+        ${keywords.slice(0, 20).map((kw, i) => `
+          <span class="keyword-tag" style="font-size:12px;padding:4px 10px" onclick="exploreTrendKeyword('${(kw.period || kw.keyword || '').replace(/'/g, "\\'")}')">
+            <span style="color:var(--accent);font-weight:600;margin-right:3px">${i+1}</span>
+            ${kw.period || kw.keyword || JSON.stringify(kw).slice(0, 20)}
+          </span>
+        `).join('')}
+      </div>
+    `;
+  } catch (err) {
+    container.innerHTML = `<div style="padding:12px;color:var(--text-dim);font-size:13px">오류: ${err.message}</div>`;
+  }
+}
+
+// ── Refresh All ──
+
 async function refreshAllTrends() {
   const btn = document.getElementById('btn-refresh-trends');
   if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> 수집 중...'; }
@@ -1185,6 +1247,97 @@ async function loadContentCalendar() {
     `;
   } catch (err) {
     container.innerHTML = `<div style="padding:12px;color:var(--text-dim);font-size:13px">캘린더 생성 실패: ${err.message}</div>`;
+  }
+}
+
+// ── Export ──
+
+// ── AI Content Ideas ──
+
+async function generateAIContentIdeas() {
+  const container = document.getElementById('trends-ai-ideas');
+  if (!container) return;
+
+  container.innerHTML = '<div style="text-align:center;padding:16px"><span class="spinner"></span> AI 콘텐츠 아이디어 생성 중...</div>';
+
+  try {
+    // 현재 트렌드 + 내 성과 데이터 수집
+    const hotSnapshot = await window.api.getTrendSnapshot('hot-topics');
+    const posts = await window.api.getPostsWithLatestMetrics({ days: 30 });
+
+    const hotKeywords = (hotSnapshot?.data || []).slice(0, 10).map(t => t.keyword);
+
+    // 내 성과 분석
+    const catPerf = {};
+    for (const p of posts) {
+      const cat = p.category || 'other';
+      if (!catPerf[cat]) catPerf[cat] = { count: 0, totalLikes: 0 };
+      catPerf[cat].count++;
+      catPerf[cat].totalLikes += p.likes || 0;
+    }
+    const bestCat = Object.entries(catPerf).sort((a, b) => (b[1].totalLikes / b[1].count) - (a[1].totalLikes / a[1].count))[0];
+    const bestCatName = bestCat ? bestCat[0] : 'tech';
+    const avgLikes = bestCat ? Math.round(bestCat[1].totalLikes / bestCat[1].count) : 0;
+
+    // 트렌드와 강점 카테고리 매칭
+    const matchedTrends = hotKeywords.filter(kw => {
+      const cat = categorizeKeyword(kw, []);
+      return cat === bestCatName || cat === 'other';
+    }).slice(0, 5);
+
+    // AI 스타일 콘텐츠 아이디어 생성 (로컬 규칙 기반)
+    const ideas = [];
+
+    // 1. 트렌드 + 내 강점 매칭
+    for (const kw of matchedTrends) {
+      ideas.push({
+        type: 'trend',
+        title: `"${kw}" 트렌드 활용`,
+        desc: `현재 뜨는 "${kw}" 키워드를 ${TREND_CAT_LABELS[bestCatName] || bestCatName} 관점에서 카드뉴스로 제작`,
+        reason: `내 ${TREND_CAT_LABELS[bestCatName] || bestCatName} 카테고리 평균 ♥${formatNumber(avgLikes)}`,
+      });
+    }
+
+    // 2. 성과 좋았던 포스트 리메이크
+    const topPosts = [...posts].sort((a, b) => (b.likes || 0) - (a.likes || 0)).slice(0, 3);
+    for (const p of topPosts) {
+      const caption = (p.caption || '').slice(0, 30);
+      ideas.push({
+        type: 'remake',
+        title: `인기 포스트 리메이크: "${caption}..."`,
+        desc: `♥${formatNumber(p.likes)} 받은 콘텐츠를 업데이트 버전으로 재발행`,
+        reason: `기존 성과 ♥${formatNumber(p.likes)} 👁${formatNumber(p.views || 0)}`,
+      });
+    }
+
+    // 3. 미개척 카테고리 도전
+    const allCats = Object.keys(TREND_CATEGORIES);
+    const unexplored = allCats.filter(c => !catPerf[c] || catPerf[c].count < 2);
+    for (const cat of unexplored.slice(0, 2)) {
+      const catTrend = hotKeywords.find(kw => categorizeKeyword(kw, []) === cat);
+      ideas.push({
+        type: 'explore',
+        title: `${TREND_CAT_LABELS[cat] || cat} 카테고리 도전`,
+        desc: catTrend ? `"${catTrend}" 트렌드로 새 카테고리 진입` : `${TREND_CAT_LABELS[cat] || cat} 분야 첫 콘텐츠 제작`,
+        reason: '미개척 카테고리 — 새로운 오디언스 확보 기회',
+      });
+    }
+
+    container.innerHTML = `
+      <div style="font-size:13px;font-weight:600;margin-bottom:8px">AI 콘텐츠 아이디어</div>
+      <div class="ai-ideas-list">
+        ${ideas.map(idea => `
+          <div class="ai-idea-card ${idea.type}">
+            <div class="ai-idea-type">${idea.type === 'trend' ? '🔥 트렌드' : idea.type === 'remake' ? '♻️ 리메이크' : '🆕 도전'}</div>
+            <div class="ai-idea-title">${idea.title}</div>
+            <div class="ai-idea-desc">${idea.desc}</div>
+            <div class="ai-idea-reason">${idea.reason}</div>
+          </div>
+        `).join('')}
+      </div>
+    `;
+  } catch (err) {
+    container.innerHTML = `<div style="padding:12px;color:var(--text-dim);font-size:13px">아이디어 생성 실패: ${err.message}</div>`;
   }
 }
 

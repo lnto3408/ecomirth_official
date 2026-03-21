@@ -23,6 +23,7 @@ contextBridge.exposeInMainWorld('api', {
   getCategoryStats: (platform, days) => ipcRenderer.invoke('get-category-stats', platform, days),
   getHourlyStats: (platform, days) => ipcRenderer.invoke('get-hourly-stats', platform, days),
   getContentGroupComparison: () => ipcRenderer.invoke('get-content-group-comparison'),
+  getHashtagStats: (platform, days) => ipcRenderer.invoke('get-hashtag-stats', platform, days),
 
   // Collection
   collect: (platform) => ipcRenderer.invoke('collect', platform),
@@ -37,6 +38,7 @@ contextBridge.exposeInMainWorld('api', {
   loadAnalyzerSettings: () => ipcRenderer.invoke('load-analyzer-settings'),
 
   // Export
+  exportReport: (format) => ipcRenderer.invoke('export-report', format),
   exportData: (format) => ipcRenderer.invoke('export-data', format),
 
   // Trends
